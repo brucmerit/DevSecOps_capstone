@@ -116,8 +116,9 @@ The DAST reports and execution screenshots are maintained in this directory.
 
 ### Screenshots
 
-- `screenshots/jenkins-dast-pipeline.png` – Evidence of the integrated DAST pipeline execution in Jenkins.
-- `screenshots/zap-security-report.png` – Evidence of the OWASP ZAP security findings.
+- `screenshots/jenkins pipeline for DAST.png` – Evidence of the integrated DAST pipeline execution in Jenkins.
+- `screenshots/zap security report_1.png` – Evidence of the OWASP ZAP security findings.
+- `screenshots/zap security report_2.png` – Evidence of the OWASP ZAP security findings.
 
 ## 6. Conclusion
 
