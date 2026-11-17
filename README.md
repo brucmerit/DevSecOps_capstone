@@ -38,7 +38,7 @@ Key responsibilities include:
 - Coordinating team members and consolidating their contributions.
 - Verifying pipeline execution and documenting project evidence.
 
-### 2.2 Team Member 1 – Jolin
+### 2.2 SAST Specialist – Jolin
 
 Responsible for implementing Static Application Security Testing (SAST) using SonarQube.
 
@@ -50,7 +50,7 @@ Key responsibilities include:
 - Configuring and evaluating the Quality Gate.
 - Providing supporting reports and screenshots.
 
-### 2.3 Team Member 2 – Raziq
+### 2.3 SCA Specialist – Raziq
 
 Responsible for implementing Software Composition Analysis (SCA) using Snyk.
 
@@ -62,7 +62,7 @@ Key responsibilities include:
 - Documenting vulnerability findings and recommendations.
 - Providing supporting reports and screenshots.
 
-### 2.4 Team Member 3 – Amos
+### 2.4 DAST Specialist – Amos
 
 Responsible for implementing Dynamic Application Security Testing (DAST) using OWASP ZAP.
 
