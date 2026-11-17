@@ -21,9 +21,9 @@ The project is carried out by a four-member team, with each member assigned spec
 | Team Member | Role | Responsibility | Security Tool |
 |---|---|---|---|
 | JJ | Team Leader | Jenkins environment setup, pipeline development, integration, team coordination and overall verification | Jenkins |
-| Jolin | Team Member 1 | Static Application Security Testing (SAST) | SonarQube |
-| Raziq | Team Member 2 | Software Composition Analysis (SCA) | Snyk |
-| Amos | Team Member 3 | Dynamic Application Security Testing (DAST) | OWASP ZAP |
+| Jolin | SAST Specialist | Static Application Security Testing (SAST) | SonarQube |
+| Raziq | SCA Specialist | Software Composition Analysis (SCA) | Snyk |
+| Amos | DAST Specialist | Dynamic Application Security Testing (DAST) | OWASP ZAP |
 
 ### 2.1 Team Leader – JJ
 
