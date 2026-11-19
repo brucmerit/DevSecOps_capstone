@@ -58,7 +58,8 @@ pipeline {
                                     -v jenkins_home:/var/jenkins_home \
                                     sonarsource/sonar-scanner-cli:latest \
                                     -Dsonar.projectBaseDir=/var/jenkins_home/juice-shop-source \
-                                    -Dproject.settings=/var/jenkins_home/workspace/DevSecOps-capstone/SAST/sonar-project.properties
+                                    -Dproject.settings=/var/jenkins_home/workspace/DevSecOps-capstone/SAST/sonar-project.properties \
+                                    -Dsonar.working.directory=/var/jenkins_home/workspace/DevSecOps-capstone/.scannerwork
                             '''
                         }
                     }
