@@ -1,0 +1,13 @@
+
+Security Gate Result: FAILED
+
+Application: OWASP-Juice-Shop
+
+Critical: 7
+High: 21
+Medium: 23
+Low: 3
+
+Maximum Critical: 0
+Maximum High: 10
+Maximum Medium: 30
