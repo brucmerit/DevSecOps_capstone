@@ -6,6 +6,10 @@ pipeline {
         DAST_NETWORK = "dast-pipeline-${BUILD_NUMBER}"
         REPORT_VOLUME = "dast-reports-${BUILD_NUMBER}"
         JUICE_SHOP = "juice-shop-${BUILD_NUMBER}"
+
+        TRIVY_IMAGE = "aquasec/trivy:0.76.2"
+        JUICE_SHOP_SOURCE = "/var/jenkins_home/juice-shop-source"
+        JENKINS_WORKSPACE = "/var/jenkins_home/workspace/DevSecOps-capstone"
     }
 
     stages {
@@ -34,12 +38,17 @@ pipeline {
                     echo "Checking project repository..."
                     pwd
                     ls -la
+
+                    echo "Checking shared Juice Shop source..."
+                    test -f "$JUICE_SHOP_SOURCE/package.json"
                 '''
             }
         }
 
+        // ==========================================
+        // SAST - SONARQUBE
+        // ==========================================
 
-        
         stage('SAST Scanning') {
             steps {
                 script {
@@ -66,6 +75,272 @@ pipeline {
                 }
             }
         }
+
+        stage('SAST Security Gate') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    script {
+                        def qg = waitForQualityGate()
+
+                        echo "SonarQube Quality Gate: ${qg.status}"
+
+                        if (qg.status != 'OK') {
+                            unstable(
+                                "SAST Quality Gate failed: ${qg.status}"
+                            )
+                        } else {
+                            echo 'SAST Security Gate PASSED!'
+                        }
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // SCA - TRIVY
+        // ==========================================
+
+        stage('SCA Dependency Preparation') {
+            steps {
+                sh '''
+                    set -e
+
+                    echo "Preparing Juice Shop dependencies..."
+
+                    test -f "$JUICE_SHOP_SOURCE/package.json"
+
+                    if [ ! -f "$JUICE_SHOP_SOURCE/package-lock.json" ]; then
+
+                        echo "package-lock.json not found."
+                        echo "Generating dependency lockfile using Node.js..."
+
+                        docker run --rm \
+                            -v jenkins_home:/var/jenkins_home \
+                            -w "$JUICE_SHOP_SOURCE" \
+                            node:22 \
+                            sh -c '
+                                node --version &&
+                                npm --version &&
+                                npm install --package-lock-only \
+                                    --package-lock=true \
+                                    --ignore-scripts \
+                                    --no-audit \
+                                    --no-fund
+                            '
+
+                    else
+                        echo "Existing package-lock.json found."
+                        echo "Skipping lockfile generation."
+                    fi
+
+                    echo "Validating dependency files..."
+
+                    test -f "$JUICE_SHOP_SOURCE/package.json"
+                    test -f "$JUICE_SHOP_SOURCE/package-lock.json"
+
+                    echo "Dependency preparation completed."
+                '''
+            }
+        }
+
+        stage('SCA Scanning') {
+            steps {
+                sh '''
+                    set -e
+
+                    echo "Starting Trivy Software Composition Analysis..."
+
+                    mkdir -p trivy-reports
+
+                    docker volume create trivy-cache
+
+                    echo "Generating Trivy JSON report..."
+
+                    docker run --rm \
+                        -v jenkins_home:/var/jenkins_home \
+                        -v trivy-cache:/root/.cache/ \
+                        "$TRIVY_IMAGE" \
+                        fs \
+                        --scanners vuln \
+                        --format json \
+                        --output /var/jenkins_home/workspace/DevSecOps-capstone/trivy-reports/trivy-report.json \
+                        /var/jenkins_home/juice-shop-source
+
+                    echo "Generating Trivy TXT report..."
+
+                    docker run --rm \
+                        -v jenkins_home:/var/jenkins_home \
+                        -v trivy-cache:/root/.cache/ \
+                        "$TRIVY_IMAGE" \
+                        fs \
+                        --scanners vuln \
+                        --format table \
+                        --output /var/jenkins_home/workspace/DevSecOps-capstone/trivy-reports/trivy-report.txt \
+                        /var/jenkins_home/juice-shop-source
+
+                    echo "Trivy scanning completed."
+
+                    ls -lh trivy-reports/
+                '''
+            }
+        }
+
+        stage('SCA Security Gate & Reporting') {
+            steps {
+                script {
+                    if (!fileExists('trivy-reports/trivy-report.json')) {
+                        error('Trivy JSON report not found!')
+                    }
+
+                    def trivyResults = readJSON(
+                        file: 'trivy-reports/trivy-report.json'
+                    )
+
+                    def criticalCount = 0
+                    def highCount = 0
+                    def mediumCount = 0
+                    def lowCount = 0
+
+                    if (trivyResults.Results) {
+                        trivyResults.Results.each { result ->
+                            if (result.Vulnerabilities) {
+                                result.Vulnerabilities.each { vulnerability ->
+                                    switch (vulnerability.Severity?.toUpperCase()) {
+                                        case 'CRITICAL':
+                                            criticalCount++
+                                            break
+                                        case 'HIGH':
+                                            highCount++
+                                            break
+                                        case 'MEDIUM':
+                                            mediumCount++
+                                            break
+                                        case 'LOW':
+                                            lowCount++
+                                            break
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    def maxCritical = 0
+                    def maxHigh = 10
+                    def maxMedium = 30
+
+                    def gatePassed =
+                        criticalCount <= maxCritical &&
+                        highCount <= maxHigh &&
+                        mediumCount <= maxMedium
+
+                    def gateStatus = gatePassed ? 'PASSED' : 'FAILED'
+
+                    def gateReport = """
+SCA SECURITY GATE RESULT: ${gateStatus}
+
+Application: OWASP Juice Shop
+
+Critical: ${criticalCount}
+High: ${highCount}
+Medium: ${mediumCount}
+Low: ${lowCount}
+
+Maximum Critical: ${maxCritical}
+Maximum High: ${maxHigh}
+Maximum Medium: ${maxMedium}
+"""
+
+                    echo gateReport
+
+                    writeFile(
+                        file: 'trivy-reports/security-gate-result.txt',
+                        text: gateReport
+                    )
+
+                    def trivyText = readFile(
+                        file: 'trivy-reports/trivy-report.txt'
+                    )
+
+                    def htmlReport = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Trivy SCA Security Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 30px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .status {
+            font-weight: bold;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Trivy SCA Security Report</h1>
+
+<p>Application: OWASP Juice Shop</p>
+<p>Build Number: ${BUILD_NUMBER}</p>
+<p>Security Gate Result:
+   <span class="status">${gateStatus}</span>
+</p>
+
+<h2>Vulnerability Summary</h2>
+
+<pre>${gateReport}</pre>
+
+<h2>Trivy Vulnerability Scan Results</h2>
+
+<pre>${trivyText}</pre>
+
+</body>
+</html>
+"""
+
+                    writeFile(
+                        file: 'trivy-reports/trivy-report.html',
+                        text: htmlReport
+                    )
+
+                    archiveArtifacts(
+                        artifacts: 'trivy-reports/**',
+                        allowEmptyArchive: false
+                    )
+
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'trivy-reports',
+                        reportFiles: 'trivy-report.html',
+                        reportName: 'Trivy SCA Security Report',
+                        reportTitles: 'Juice Shop SCA Results'
+                    ])
+
+                    if (!gatePassed) {
+                        unstable('SCA Security Gate failed: vulnerability thresholds exceeded.')
+                    } else {
+                        echo 'SCA Security Gate PASSED!'
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // DAST - OWASP ZAP
+        // ==========================================
 
         stage('Deploy DAST Test Environment') {
             steps {
