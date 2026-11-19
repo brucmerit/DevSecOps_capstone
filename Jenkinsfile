@@ -38,6 +38,34 @@ pipeline {
             }
         }
 
+
+        
+        stage('SAST Scanning') {
+            steps {
+                script {
+                    withSonarQubeEnv('SonarQube-Server') {
+                        withCredentials([
+                            string(
+                                credentialsId: 'sonar-token',
+                                variable: 'SONAR_TOKEN'
+                            )
+                        ]) {
+                            sh '''
+                                docker run --rm \
+                                    --network devsecops-network \
+                                    -e SONAR_HOST_URL=http://sonarqube:9000 \
+                                    -e SONAR_TOKEN \
+                                    -v jenkins_home:/var/jenkins_home \
+                                    sonarsource/sonar-scanner-cli:latest \
+                                    -Dsonar.projectBaseDir=/var/jenkins_home/juice-shop-source \
+                                    -Dproject.settings=/var/jenkins_home/workspace/DevSecOps-capstone/SAST/sonar-project.properties
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Deploy DAST Test Environment') {
             steps {
                 sh '''
