@@ -63,7 +63,7 @@ pipeline {
                             )
                         ]) {
                             sh '''
-                                docker run --rm
+                                docker run --rm \
                                     --network devsecops-network \
                                     -e SONAR_HOST_URL=http://sonarqube:9000 \
                                     -e SONAR_TOKEN \
