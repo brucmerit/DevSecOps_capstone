@@ -2,6 +2,9 @@
 pipeline {
     agent any
 
+    triggers {
+        pollSCM('H/2 * * * *')
+    }
     environment {
         DAST_NETWORK = "dast-pipeline-${BUILD_NUMBER}"
         REPORT_VOLUME = "dast-reports-${BUILD_NUMBER}"
@@ -60,7 +63,7 @@ pipeline {
                             )
                         ]) {
                             sh '''
-                                docker run --name sonar-scanner-debug \
+                                docker run --rm
                                     --network devsecops-network \
                                     -e SONAR_HOST_URL=http://sonarqube:9000 \
                                     -e SONAR_TOKEN \
@@ -484,7 +487,42 @@ Maximum Medium: ${maxMedium}
                 }
             }
         }
+        stage('Push Reports to GitHub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-read-token',
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_PASS'
+                )]) {
+                    sh '''
+                        set -e
 
+                        git config user.name "Jenkins CI"
+                        git config user.email "jenkins@local.ci"
+
+                        mkdir -p SCA/reports
+                        cp -f trivy-reports/trivy-report.html SCA/reports/
+                        cp -f trivy-reports/trivy-report.json SCA/reports/
+                        cp -f trivy-reports/trivy-report.txt SCA/reports/
+                        cp -f trivy-reports/security-gate-result.txt SCA/reports/
+
+                        mkdir -p DAST/reports
+                        cp -f dast-reports/zap-juice-shop-report.html DAST/reports/
+                        cp -f dast-reports/zap-results.json DAST/reports/
+
+                        git add SCA/reports/ DAST/reports/
+
+                        if ! git diff --staged --quiet; then
+                            git commit -m "chore: update SCA and DAST reports [Build #${BUILD_NUMBER}] [skip ci]"
+                            git push https://${GIT_USER}:${GIT_PASS}@://github.com HEAD:main
+                            echo "Reports pushed to GitHub successfully!"
+                        else
+                            echo "No report changes detected. Skipping GitHub push."
+                        fi
+                    '''
+                }
+            }
+        }
         stage('Pipeline Completed') {
             steps {
                 echo 'DevSecOps pipeline execution completed!'
